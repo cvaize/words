@@ -1,0 +1,122 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Умный Словарь (Turbo)</title>
+    <style>
+        :root { --row-h: 50px; }
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; }
+        
+        /* Виртуальный скролл */
+        #viewport { height: 100vh; overflow-y: auto; position: relative; will-change: transform; }
+        #spacer { position: absolute; top: 0; left: 0; right: 0; z-index: -1; }
+        #content { position: absolute; top: 0; left: 0; right: 0; }
+
+        .row { 
+            height: var(--row-h); 
+            display: flex; 
+            align-items: center; 
+            padding: 0 16px; 
+            background: white; 
+            border-bottom: 1px solid #eee;
+            box-sizing: border-box;
+        }
+        .row.header { 
+            background: #4a5568; 
+            color: white; 
+            font-weight: bold; 
+            font-size: 0.8rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em;
+        }
+        
+        .term { flex: 1; font-weight: 600; color: #2d3748; }
+        .trans-wrapper { flex: 1; text-align: right; }
+        
+        .hidden-word {
+            display: inline-block;
+            background: #edf2f7;
+            color: transparent;
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        .hidden-word:hover, .hidden-word.revealed {
+            background: transparent;
+            color: #4a5568;
+        }
+        
+        .stats { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 6px 15px; border-radius: 20px; font-size: 12px; z-index: 100; }
+    </style>
+</head>
+<body>
+
+<div id="viewport">
+    <div id="spacer"></div>
+    <div id="content"></div>
+</div>
+
+<div class="stats" id="stats-box">Загрузка...</div>
+
+<script>
+    window.OpenIndex = {}
+    let data = [["open","открывать"],["build","строить"],["send","посылать"],["die","умирать"],["serve","служить"],["buy","покупать"],["appear","появляться"],["consider","считать"],["remember","помнить"],["offer","предлагать"],["teach","учить"],["win","побеждать"],["walk","идти"],["stay","оставаться"],["grow","расти"],["spend","тратить"],["read","читать"],["speak","говорить"],["create","создавать"],["stop","останавливать"],["follow","следовать"],["watch","смотреть"],["understand","понимать"],["lead","вести"],["change","менять"],["develop","развивать"],["choose","выбирать"],["draw","рисовать"],["catch","ловить"],["cover","покрывать"],["eat","есть"],["produce","производить"],["hit","ударять"],["support","поддерживать"],["agree","соглашаться"],["receive","получать"],["break","ломать"],["carry","везти; нести"],["learn","учить"],["hope","надеяться"],["explain","объяснять"],["return","возвращаться"],["decide","решать"],["sell","продавать"],["pass","миновать"],["raise","поднимать"],["kill","убивать"],["reach","достигать"],["cut","резать"],["fall","падать"],["live","жить"],["put","класть, ставить"],["mean","значить"],["keep","хранить"],["let","позволять"],["begin","начинать"],["seem","казаться"],["help","помогать"],["show","показывать"],["hear","слышать"],["play","играть"],["run","бежать"],["move","двигаться"],["leave","оставлять"],["believe","верить"],["bring","приносить"],["happen","случаться"],["write","писать"],["sit","сидеть"],["stand","стоять"],["lose","терять"],["pay","платить"],["meet","встречать"],["include","включать"],["continue","продолжать"],["use","использовать"],["be","быть"],["have","иметь"],["do","делать"],["say","говорить"],["go","идти"],["get","получать"],["make","делать"],["know","знать"],["think","думать"],["see","видеть"],["take","брать"],["come","приходить"],["set","устанавливать"],["want","хотеть"],["tell","рассказывать"],["give","давать"],["find","находить"],["work","работать"],["call","звать; звонить"],["try","пытаться"],["ask","просить; спрашивать"],["need","нуждаться"],["feel","чувствовать"],["become","становиться"],["rarely","редко"],["soon","вскоре"],["somewhere","где-то"],["sometimes","иногда"],["somehow","как-нибудь"],["so","так"],["slowly","медленно"],["since","с тех пор"],["seldom","редко"],["round","вокруг"],["recently","недавно"],["really","на самом деле"],["rather","скорее"],["still","все еще"],["quite","вполне"],["quickly","быстро"],["probably","вероятно"],["plenty","вполне, довольно"],["perhaps","возможно"],["outside","снаружи"],["otherwise","иначе"],["only","только"],["once","однажды"],["often","часто"],["off","вне"],["too","слишком"],["yes","да"],["no","нет"],["yet","еще"],["yesterday","вчера"],["without","вне"],["why","почему"],["where","где"],["whenever","когда же"],["when","когда"],["well","хорошо"],["very","очень"],["usually","обычно"],["occasionally","время от времени"]];
+    let ROW_HEIGHT = 50;
+    let viewport = document.getElementById('viewport');
+    let spacer = document.getElementById('spacer');
+    let content = document.getElementById('content');
+    let stats = document.getElementById('stats-box');
+
+    spacer.style.height = (data.length * ROW_HEIGHT) + 'px';
+
+    let t = localStorage.getItem("scrollTop");
+    if (t) t = Number(t)
+    if (t && !Number.isNaN(t)) {
+        viewport.scrollTo({top: t});
+    }
+
+    function update() {
+        let top = viewport.scrollTop;
+        requestAnimationFrame(function (){
+            localStorage.setItem("scrollTop", String(top));
+        });
+        let winH = window.innerHeight;
+        
+        let startIdx = Math.floor(top / ROW_HEIGHT) - 10;
+        let endIdx = Math.ceil((top + winH) / ROW_HEIGHT) + 10;
+        
+        startIdx = Math.max(0, startIdx);
+        endIdx = Math.min(data.length - 1, endIdx);
+
+        content.style.transform = "translateY(" + (startIdx * ROW_HEIGHT) + "px)";
+
+        let html = '<div class="row header">Самые популярные слова в английском языке</div>';
+        for (let i = startIdx; i <= endIdx; i++) {
+            let item = data[i];
+            let revealed = window.OpenIndex[i] ? "revealed" : "";
+            html += `
+                    <div class="row">
+                        <div class="term">${item[0]}</div>
+                        <div class="trans-wrapper">
+                            <span class="hidden-word ${revealed}" onclick="window.OpenIndex[${i}] = !window.OpenIndex[${i}]; this.classList.toggle('revealed')">${item[1]}</span>
+                        </div>
+                    </div>`;
+        }
+        content.innerHTML = html;
+        if ((endIdx + 1) !== data.length) {
+            stats.innerText = "Строки " + (startIdx + 1) + "-" + (endIdx + 1) + " из " + data.length;
+        } else {
+            stats.innerText = "Строки " + (startIdx + 1) + "-" + (endIdx + 1);
+        }
+    }
+
+    viewport.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    update();
+</script>
+</body>
+</html>
